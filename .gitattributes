@@ -1,0 +1,50 @@
+# 기본
+* text=auto eol=lf
+
+# Python / 설정 / 문서
+*.py          text eol=lf
+*.pyi         text eol=lf
+*.pyx         text eol=lf
+*.toml        text eol=lf
+*.cfg         text eol=lf
+*.ini         text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.json        text eol=lf
+*.md          text eol=lf
+*.txt         text eol=lf
+*.sh          text eol=lf
+*.sql         text eol=lf
+.env.example  text eol=lf
+Dockerfile    text eol=lf
+Makefile      text eol=lf
+
+# Windows 스크립트만 CRLF
+*.bat         text eol=crlf
+*.cmd         text eol=crlf
+
+# Jupyter (JSON 기반이지만 diff 노이즈 많음 — text 로만)
+*.ipynb       text
+
+# 바이너리
+*.png         binary
+*.jpg         binary
+*.jpeg        binary
+*.gif         binary
+*.webp        binary
+*.ico         binary
+*.pdf         binary
+*.zip         binary
+*.tar         binary
+*.gz          binary
+*.whl         binary
+
+# 모델 파일은 어차피 .gitignore 되지만 안전장치
+*.pkl         binary
+*.h5          binary
+*.pt          binary
+*.pth         binary
+*.onnx        binary
+*.tflite      binary
+*.bin         binary
+*.npz         binary
