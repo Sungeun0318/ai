@@ -2,8 +2,8 @@
 
 거지 우정 수호대 — **AI 추천 / OCR 서버** (FastAPI)
 
-## 현재 상태 (2026-05-28)
-**스캐폴딩 완료**. FastAPI 0.115 + Python 3.11+ 권장. 라우터/스키마/서비스/공통 패키지 골격만 들어 있고, 추천 알고리즘과 OCR 본체는 비어있음 (구현 예정).
+## 현재 상태 (2026-05-29)
+**스캐폴딩 완료 + 도메인 기반 구조로 재배치**. FastAPI 0.115 + Python 3.11+ 권장. 5인 협업을 위해 도메인 폴더(`recommend`, `ocr`) 단위로 router/service/schema를 묶음. 추천 알고리즘과 OCR 본체는 비어있음 (구현 예정).
 
 ## 기술 스택
 - **웹**: FastAPI + Uvicorn
@@ -20,21 +20,31 @@
 - 백엔드 `RecommendationService` 와 `ReceiptService` 가 본 서버를 호출
 - 본 서버는 **stateless** — DB 적재 없음, 호출 시점에만 처리
 
-## 패키지 구조
+## 패키지 구조 (도메인 기반)
 ```
 ai/
 ├── requirements.txt          런타임 의존성
 ├── requirements-dev.txt      pytest, ruff, mypy
 ├── .env.example              환경변수 템플릿
 ├── app/
-│   ├── main.py               FastAPI 진입점 + 라우터 등록
-│   ├── core/                 설정 (config) + 로깅
-│   ├── api/v1/               라우터 (recommend, ocr, health)
-│   ├── schemas/              Pydantic DTO (백엔드 Java record 와 1:1)
-│   ├── services/             비즈니스 로직 (추천, OCR)
-│   └── common/               공통 예외
+│   ├── main.py               FastAPI 진입점 + 도메인 라우터 등록
+│   │
+│   ├── core/                 ⭐ 전 도메인 공용 인프라
+│   │   ├── config.py         pydantic-settings
+│   │   ├── logging.py        로깅 설정
+│   │   ├── exceptions.py     공통 예외
+│   │   └── health.py         GET /api/v1/health
+│   │
+│   ├── domains/              ⭐ 도메인별 코드 — 1인 1도메인 owner
+│   │   ├── recommend/        router.py + service.py + schema.py
+│   │   └── ocr/              router.py + service.py + schema.py
+│   │
+│   └── shared/               (옵션, 첫 사용 시 생성)
+│                             도메인 간 공유 유틸 (카카오 클라이언트 등)
 └── tests/                    pytest
 ```
+
+**의존성 방향**: `domains/* → shared/ → core/`. 도메인끼리 직접 import 금지.
 
 ## 실행 방법
 

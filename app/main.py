@@ -7,8 +7,9 @@ uvicorn 실행:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import health, ocr, recommend
+from app.core import health
 from app.core.config import settings
+from app.domains import ocr, recommend
 
 app = FastAPI(
     title=settings.app_name,
@@ -25,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 라우터 등록 (v1)
-app.include_router(health.router, prefix="/api/v1", tags=["health"])
+# 라우터 등록 (도메인별, /api/v1 통합 prefix)
+app.include_router(health.router,    prefix="/api/v1", tags=["health"])
 app.include_router(recommend.router, prefix="/api/v1", tags=["recommend"])
-app.include_router(ocr.router, prefix="/api/v1", tags=["ocr"])
+app.include_router(ocr.router,       prefix="/api/v1", tags=["ocr"])

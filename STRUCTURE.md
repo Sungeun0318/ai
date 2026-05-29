@@ -1,7 +1,7 @@
 # Python AI 서버 파일 구조 & 기능 설명
 
 > `ai/` 디렉터리의 모든 파일이 어떤 역할인지, 어떤 내용을 담아야 하는지 정리.
-> **2026-05-28 기준**: 서비스 / 라우터 본체 코드는 비어있음. 본 문서가 그 빈 파일들의 "구현 계약서".
+> **2026-05-29 기준**: 도메인 기반(domain-based) 구조로 재배치. 5인 협업 친화적.
 
 ---
 
@@ -9,201 +9,220 @@
 
 ```
 ai/
-├── .gitignore              Python + IDE + OS + 비밀 파일 차단
-├── .gitattributes          라인엔딩 LF 정규화 (Mac/Windows 협업)
-├── README.md               실행 방법 + API 계약 요약
-├── STRUCTURE.md            (본 문서) 파일별 상세 설명
-├── requirements.txt        런타임 의존성 (fastapi, pydantic, httpx 등)
-├── requirements-dev.txt    개발 의존성 (pytest, ruff, mypy)
-├── .env.example            환경변수 템플릿 (.env 는 gitignored)
+├── .gitignore
+├── .gitattributes
+├── README.md
+├── STRUCTURE.md               (본 문서)
+├── requirements.txt           런타임 의존성
+├── requirements-dev.txt       pytest, ruff, mypy
+├── .env.example
 ├── app/
 │   ├── __init__.py
-│   ├── main.py             FastAPI 진입점 + CORS + 라우터 등록
-│   ├── core/
+│   ├── main.py                FastAPI 진입점 + CORS + 도메인 라우터 등록
+│   │
+│   ├── core/                  ⭐ 전 도메인 공용 인프라
 │   │   ├── __init__.py
-│   │   ├── config.py       pydantic-settings — .env 자동 로드
-│   │   └── logging.py      로깅 설정
-│   ├── api/
+│   │   ├── config.py          pydantic-settings — .env 자동 로드
+│   │   ├── logging.py         로깅 설정
+│   │   ├── exceptions.py      AIServerError / OcrFailed / RecommendationFailed
+│   │   └── health.py          GET /api/v1/health  (구현 완료)
+│   │
+│   ├── domains/               ⭐ 도메인 폴더 — 5인 협업 시 각자 1개씩 owner
 │   │   ├── __init__.py
-│   │   └── v1/
-│   │       ├── __init__.py
-│   │       ├── health.py       GET /api/v1/health
-│   │       ├── recommend.py    ⚠ 비어있음 — GET /api/v1/recommend
-│   │       └── ocr.py          ⚠ 비어있음 — POST /api/v1/ocr
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── recommend.py    Pydantic — RecommendResponse / Place
-│   │   └── ocr.py          Pydantic — OcrRequest / OcrResponse
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── recommend_service.py    ⚠ 비어있음 — 추천 알고리즘
-│   │   └── ocr_service.py          ⚠ 비어있음 — OCR 호출 + 파싱
-│   └── common/
-│       ├── __init__.py
-│       └── exceptions.py    AIServerError / OcrFailed / RecommendationFailed
+│   │   │
+│   │   ├── recommend/         👤 추천 담당
+│   │   │   ├── __init__.py    → from .router import router
+│   │   │   ├── router.py      ⚠ GET /api/v1/recommend  (구현 예정)
+│   │   │   ├── service.py     ⚠ 추천 알고리즘 (구현 예정)
+│   │   │   ├── schema.py      Pydantic — RecommendResponse / Place
+│   │   │   └── repository.py  (옵션) 카카오 로컬 API · 크라우드 가격 호출
+│   │   │
+│   │   └── ocr/               👤 OCR 담당
+│   │       ├── __init__.py    → from .router import router
+│   │       ├── router.py      ⚠ POST /api/v1/ocr  (구현 예정)
+│   │       ├── service.py     ⚠ OCR 오케스트레이션 (구현 예정)
+│   │       ├── schema.py      Pydantic — OcrRequest / OcrResponse
+│   │       └── parser.py      (옵션) 정규식·룰 기반 텍스트 추출
+│   │
+│   └── shared/                (옵션, 첫 사용 시 생성) 도메인 간 공유 유틸
+│       ├── kakao_client.py    카카오 API httpx 클라이언트
+│       ├── s3_client.py       S3 다운로드
+│       └── geo_utils.py       Haversine 거리 등
+│
 └── tests/
     ├── __init__.py
-    └── test_health.py       헬스 체크 라우터 테스트
+    └── test_health.py         GET /api/v1/health 통합 테스트
 ```
+
+---
+
+## 의존성 방향 (import 규칙)
+
+```
+domains/*  →  shared/  →  core/
+   ↑
+   └─ domains끼리 직접 import 금지
+      공통 호출 필요 시 shared/ 로 빼서 재사용
+```
+
+- `domains/recommend/` ↔ `domains/ocr/` 직접 호출 ❌
+- `core/`는 누구나 import 가능
+- `shared/`는 도메인이 공유 가능, 도메인을 import ❌
+- 외부 패키지(`fastapi`, `httpx`, `pydantic`)는 어디서나 OK
+
+---
+
+## 라우터 등록 흐름
+
+`app/main.py`가 각 도메인의 `__init__.py`에서 `router`를 가져와 `/api/v1` prefix로 등록.
+
+```python
+# app/main.py
+from app.core import health
+from app.domains import recommend, ocr
+
+app.include_router(health.router,    prefix="/api/v1", tags=["health"])
+app.include_router(recommend.router, prefix="/api/v1", tags=["recommend"])
+app.include_router(ocr.router,       prefix="/api/v1", tags=["ocr"])
+```
+
+도메인을 추가하려면:
+1. `app/domains/<new_domain>/` 폴더 생성
+2. `router.py`, `service.py`, `schema.py` 작성
+3. `__init__.py`에 `from .router import router`
+4. `app/main.py`에 한 줄 추가
 
 ---
 
 ## 루트 파일
 
 ### `requirements.txt`
-런타임 의존성. 현재 포함:
-- `fastapi==0.115.5`, `uvicorn[standard]==0.32.1` — 웹 서버
-- `pydantic==2.9.2`, `pydantic-settings==2.6.1` — DTO + 환경 설정
-- `httpx==0.27.2` — 비동기 HTTP 클라이언트
-- `python-multipart==0.0.17` — 파일 업로드
+런타임 의존성:
+- `fastapi==0.115.5`, `uvicorn[standard]==0.32.1`
+- `pydantic==2.9.2`, `pydantic-settings==2.6.1`
+- `httpx==0.27.2`
+- `python-multipart==0.0.17`
 
 주석 처리된 후보:
 - OCR: `pytesseract` / `easyocr` / `Pillow`
 - 추천 알고리즘: `numpy` / `pandas` / `scikit-learn`
-- 크롤링: `beautifulsoup4` / `selenium` (백엔드에 이미 있으면 불필요)
 
 ### `requirements-dev.txt`
-`-r requirements.txt` 로 런타임 의존성 포함 + 개발 도구:
 - `pytest==8.3.4`, `pytest-asyncio==0.24.0`
-- `ruff==0.8.4` — 린터/포매터 (black 대체)
+- `ruff==0.8.4` — 린터/포매터
 - `mypy==1.13.0` — 정적 타입 체크
 
 ### `.env.example`
-실제 `.env` 파일 만들기 위한 템플릿. 키:
-- 서버: `APP_NAME`, `APP_ENV`, `HOST`, `PORT`
-- 백엔드 연동: `BACKEND_BASE_URL`, `BACKEND_API_KEY`
-- 외부 API: `KAKAO_REST_API_KEY`, `NAVER_CLIENT_ID/SECRET`
-- AWS S3: `AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`
-- 로깅: `LOG_LEVEL`
-- (주석) OCR: `CLOVA_OCR_URL/SECRET`
-- (주석) LLM: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
-
-### `README.md`
-실행 방법, API 엔드포인트, 백엔드 ↔ Python 계약(JSON 예시).
+서버 / 백엔드 연동 / 외부 API / AWS S3 / 로깅 키.
 
 ---
 
-## app/ — 메인 패키지
-
-### `app/main.py`
+## app/main.py
 FastAPI 진입점. **하는 일**:
 1. `FastAPI()` 인스턴스 생성 (title/version)
 2. CORS 미들웨어 등록 (개발용 전체 허용)
-3. v1 라우터 3개 등록 (`health`, `recommend`, `ocr`) — 모두 `/api/v1` 접두사
+3. 도메인 라우터 등록 (`health`, `recommend`, `ocr`) — 모두 `/api/v1` prefix
 - 실행: `uvicorn app.main:app --reload --port 8000`
 
 ---
 
-## app/core/ — 공통 인프라
+## app/core/ — 전 도메인 공용 인프라
 
-### `app/core/config.py`
+### `core/config.py`
 `Settings(BaseSettings)` 클래스. `pydantic-settings`로 `.env` 자동 로드.
-- 클래스 속성으로 정의된 키만 `.env`에서 읽음 (case_sensitive=False)
 - `extra="ignore"` — 정의 안 된 키는 무시
 - 사용: `from app.core.config import settings; settings.kakao_rest_api_key`
 
-### `app/core/logging.py`
+### `core/logging.py`
 `configure_logging()` 함수. `settings.log_level` 기반 표준 로깅 설정.
-> 운영 단계에서 `structlog` / `loguru` 도입 고려.
 
----
-
-## app/api/v1/ — REST 라우터
-
-### `app/api/v1/health.py`
-헬스 체크. **구현 완료**.
-- `GET /api/v1/health` → `{"status": "ok"}`
-
-### `app/api/v1/recommend.py` ⚠ 비어있음
-추천 라우터. **TODO**:
-```python
-@router.get("/recommend", response_model=RecommendResponse)
-def recommend(
-    room_no: int,
-    budget: int,
-    tags: str,                 # "중식,한식,일식,양식,기타요식업" 중 콤마 분리
-    lat: float | None = None,
-    lng: float | None = None,
-) -> RecommendResponse:
-    return recommend_service.recommend(...)
-```
-- 백엔드 `RecommendationService.recommend()`가 `aiServerWebClient.get()`으로 호출
-- 응답은 `schemas/recommend.py`의 `RecommendResponse` (Java `RecommendationResponse`와 1:1)
-
-### `app/api/v1/ocr.py` ⚠ 비어있음
-OCR 라우터. **TODO**:
-```python
-@router.post("/ocr", response_model=OcrResponse)
-async def parse_receipt(request: OcrRequest) -> OcrResponse:
-    return await ocr_service.parse(request)
-```
-- 백엔드 `ReceiptService.create()`/`updateAmount()` 처리 후 비동기 호출
-- 또는 백엔드가 webhook URL을 알려주고 Python이 끝나면 callback 하는 패턴도 가능
-
----
-
-## app/schemas/ — Pydantic DTO
-
-JSON 직렬화 시 카멜케이스 (`expectedPrice`, `roomNo` 등) — 백엔드 Java record와 매칭.
-`ConfigDict(populate_by_name=True)` + `Field(alias=...)` 패턴 사용.
-
-### `app/schemas/recommend.py`
-- `Place` — 가게 1곳 (name, category, expectedPrice, walkTime, rating, thumbnailUrl, address, lat, lng)
-- `RecommendResponse` — 응답 전체 (roomNo, totalBudget, places: list[Place])
-- **백엔드 매핑**: `com.beggar.api.dto.recommendation.RecommendationResponse` 와 동일 구조
-
-### `app/schemas/ocr.py`
-- `OcrRequest` — 요청 (receiptId, imageUrl)
-- `OcrResponse` — 응답 (receiptId, success, storeName, totalAmount, address, centerLat, centerLng, errorMessage)
-- **백엔드 매핑**: `Receipt` 엔티티의 `applyOcrResult(...)` 메서드 파라미터와 매칭
-
----
-
-## app/services/ — 비즈니스 로직 (전부 비어있음)
-
-### `app/services/recommend_service.py` ⚠ 비어있음
-**구현 가이드**:
-1. 위치 기준 카테고리별 후보 가게 수집
-   - 카카오 로컬 API (`https://dapi.kakao.com/v2/local/search/keyword.json`)
-   - `httpx.AsyncClient` 로 비동기 호출
-2. 가격대 필터 (가게별 평균가 추정 — 카테고리별 룰 또는 학습된 모델)
-3. 조합 최적화: 예산 안에서 별점/거리 가중치 합 최대화
-4. 도보 시간 계산 (단순 거리 → 분 환산, 또는 카카오 Directions API)
-
-### `app/services/ocr_service.py` ⚠ 비어있음
-**구현 가이드**:
-1. `image_url`에서 이미지 다운로드 (`httpx.AsyncClient`)
-2. OCR 엔진 호출
-   - **CLOVA OCR** (네이버, 한글 영수증 잘함, 유료)
-   - **Tesseract** (오픈소스, 한글 학습 데이터 필요)
-   - **EasyOCR** (PyTorch 기반)
-3. 텍스트에서 상호명/금액 추출 (정규식 + 룰 기반)
-4. 주소 → 좌표 변환 (카카오 Geocoding API)
-5. 실패 시 `OcrFailed(message=...)` 예외 발생
-
----
-
-## app/common/
-
-### `app/common/exceptions.py`
-HTTP 예외 클래스. FastAPI `HTTPException` 상속:
+### `core/exceptions.py`
+공통 예외 (이전 `common/exceptions.py`에서 이동).
 - `AIServerError(code, message, http_status)` — 기본
 - `OcrFailed(message)` — 422
 - `RecommendationFailed(message)` — 502
+- 응답 바디: `{"detail": {"code": "OCR_001", "message": "..."}}`
+- 백엔드의 `CustomException + ErrorCode` 구조와 의도적으로 비슷하게 맞춤.
 
-응답 바디 형태: `{"detail": {"code": "OCR_001", "message": "..."}}`
+### `core/health.py`
+헬스 체크 라우터. **구현 완료**.
+- `GET /api/v1/health` → `{"status": "ok"}`
 
-> 백엔드의 `CustomException` + `ErrorCode` 구조와 의도적으로 비슷하게 맞춤 (디버깅 일관성).
+---
+
+## app/domains/ — 도메인별 비즈니스 로직
+
+각 도메인은 동일한 패턴: **router.py + service.py + schema.py** (+ 선택적 repository/parser).
+
+### `domains/recommend/`
+- **`router.py`** ⚠ — `GET /api/v1/recommend` 엔드포인트
+  - Query: `room_no, budget, tags(콤마 구분), lat, lng`
+- **`service.py`** ⚠ — 추천 오케스트레이션
+  1. 위치 기반 후보 가게 수집 (카카오 로컬 API)
+  2. 가격대 필터
+  3. 조합 최적화 (예산 안 최대 만족도)
+  4. 도보 시간 계산
+- **`schema.py`** — `RecommendResponse(roomNo, totalBudget, places: list[Place])`
+  - `populate_by_name=True` + `Field(alias=...)` 으로 camelCase JSON ↔ snake_case 파이썬
+  - 백엔드 `RecommendationResponse` (Java record) 와 1:1 매핑
+
+### `domains/ocr/`
+- **`router.py`** ⚠ — `POST /api/v1/ocr`
+  - Body: `OcrRequest(receiptId, imageUrl)`
+- **`service.py`** ⚠ — OCR 처리
+  1. `image_url`에서 이미지 다운로드 (httpx)
+  2. OCR 엔진 호출 (CLOVA / Tesseract / EasyOCR — 선택)
+  3. 텍스트 → 상호명/금액 정규식 추출
+  4. 주소 → 좌표 변환 (카카오 Geocoding)
+  5. 실패 시 `OcrFailed(message=...)` 발생
+- **`schema.py`** — `OcrRequest` / `OcrResponse`
+  - 백엔드 `Receipt.applyOcrResult(...)` 파라미터와 매칭
+
+---
+
+## app/shared/ — 도메인 공유 유틸 (옵션)
+
+처음엔 비어있어도 됨. 도메인끼리 같은 외부 호출이 중복되기 시작하면 옮긴다.
+
+권장 분리 시점:
+- 카카오 API 클라이언트가 recommend + ocr 둘 다에서 호출됨
+- S3 다운로드가 ocr + future analysis 양쪽에서 필요
+- 위경도 계산이 recommend + future analysis 양쪽
 
 ---
 
 ## tests/
 
 ### `tests/test_health.py`
-헬스 체크 라우터 통합 테스트. `TestClient(app)` 사용 — 실제 서버 안 띄움.
-- `GET /api/v1/health` → 200 + `{"status": "ok"}` 검증
+헬스 체크 라우터 통합 테스트. `TestClient(app)` 사용.
+- `GET /api/v1/health` → 200 + `{"status": "ok"}`
 
-추가 테스트는 같은 패턴으로 `tests/test_recommend.py`, `tests/test_ocr.py` 생성하면 됨.
+도메인 테스트는 `tests/recommend/test_*.py`, `tests/ocr/test_*.py` 패턴으로 분리 권장.
+
+---
+
+## 5명 협업 규칙
+
+### 1. 도메인 오너
+- `domains/recommend/` → 추천 담당
+- `domains/ocr/` → OCR 담당
+- `core/`, `shared/` → 모두 가능, PR은 최소 2명 승인
+
+### 2. PR 범위
+- 1 PR = 1 도메인 (도메인 넘나드는 변경 금지 — 자르거나 shared/ 분리)
+
+### 3. 코드 스타일 (강제)
+- `ruff check .` + `ruff format .`
+- `mypy app/`
+- pre-commit hook 으로 자동 실행 권장
+
+### 4. 테스트 의무
+- 도메인 PR엔 `tests/<domain>/` 추가 필수
+- `pytest -v` 통과 안 하면 merge 금지
+
+### 5. 커밋 컨벤션
+- `backend/COMMIT_CONVENTION.md` 동일 적용
+- 예: `Feat: recommend 도메인 스코어링 모델 추가`
 
 ---
 
@@ -212,11 +231,9 @@ HTTP 예외 클래스. FastAPI `HTTPException` 상속:
 1. **`.env` 작성** + `pip install -r requirements-dev.txt`
 2. **`uvicorn app.main:app --reload`** 로 띄워서 `/docs` Swagger 확인
 3. **`tests/test_health.py`** 통과 확인 (`pytest -v`)
-4. **`recommend_service.recommend()`** 본체 — 더미 데이터 먼저 반환 → 백엔드 연결 확인
-5. **카카오 로컬 API 연동** — 실제 가게 데이터 받아오기
-6. **조합 최적화** — 예산 안에서 최적 조합 알고리즘
-7. **`ocr_service.parse()`** 본체 — OCR 엔진 결정 후 구현
-8. **에러 처리** — 외부 API 실패 / 타임아웃 / 이미지 다운로드 실패 케이스
+4. **`domains/recommend/service.py`** 본체 — 더미 데이터 먼저 반환 → 백엔드 연결 확인
+5. **카카오 로컬 API 연동** — `shared/kakao_client.py` 생성 시점
+6. **조합 최적화** 알고리즘
+7. **`domains/ocr/service.py`** 본체 — OCR 엔진 결정 후 구현
+8. **에러 처리** — 외부 API 실패 / 타임아웃 / 이미지 다운로드 실패
 9. **로깅 강화** — 요청 ID 추적, 외부 호출 응답 시간 등
-
-각 단계마다 백엔드의 `RecommendationService` / `ReceiptService`에서 실제로 호출해서 end-to-end 확인하면 빠름.
