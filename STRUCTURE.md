@@ -1,7 +1,7 @@
 # Python AI 서버 파일 구조 & 기능 설명
 
 > `ai/` 디렉터리의 모든 파일이 어떤 역할인지, 어떤 내용을 담아야 하는지 정리.
-> **2026-05-29 기준**: 도메인 기반(domain-based) 구조로 재배치. 5인 협업 친화적.
+> **2026-05-30 기준**: 도메인 기반(domain-based) 구조로 재배치. 추천은 착한가격업소 API 기준, OCR은 영수증 파싱 + 착한가격업소 매칭 후보 반환 기준.
 
 ---
 
@@ -30,12 +30,12 @@ ai/
 │   ├── domains/               ⭐ 도메인 폴더 — 5인 협업 시 각자 1개씩 owner
 │   │   ├── __init__.py
 │   │   │
-│   │   ├── recommend/         👤 추천 담당
+│   │   ├── recommend/         👤 착한가격업소 추천 담당
 │   │   │   ├── __init__.py    → from .router import router
 │   │   │   ├── router.py      ⚠ GET /api/v1/recommend  (구현 예정)
 │   │   │   ├── service.py     ⚠ 추천 알고리즘 (구현 예정)
 │   │   │   ├── schema.py      Pydantic — RecommendResponse / Place
-│   │   │   └── repository.py  (옵션) 카카오 로컬 API · 크라우드 가격 호출
+│   │   │   └── repository.py  (옵션) 착한가격업소 API 클라이언트
 │   │   │
 │   │   └── ocr/               👤 OCR 담당
 │   │       ├── __init__.py    → from .router import router
@@ -45,7 +45,8 @@ ai/
 │   │       └── parser.py      (옵션) 정규식·룰 기반 텍스트 추출
 │   │
 │   └── shared/                (옵션, 첫 사용 시 생성) 도메인 간 공유 유틸
-│       ├── kakao_client.py    카카오 API httpx 클라이언트
+│       ├── good_price_client.py 착한가격업소 API httpx 클라이언트
+│       ├── kakao_client.py    지오코딩 후보 API 클라이언트
 │       ├── s3_client.py       S3 다운로드
 │       └── geo_utils.py       Haversine 거리 등
 │
@@ -158,13 +159,15 @@ FastAPI 진입점. **하는 일**:
 - **`router.py`** ⚠ — `GET /api/v1/recommend` 엔드포인트
   - Query: `room_no, budget, tags(콤마 구분), lat, lng`
 - **`service.py`** ⚠ — 추천 오케스트레이션
-  1. 위치 기반 후보 가게 수집 (카카오 로컬 API)
-  2. 가격대 필터
-  3. 조합 최적화 (예산 안 최대 만족도)
-  4. 도보 시간 계산
+  1. 지역/좌표 기준 착한가격업소 후보 수집
+  2. 앱 태그(`한식 / 양식 / 일식 / 중식 / 기타 요식업`)와 업종 매핑
+  3. 남은 예산 기준 가격대 필터
+  4. 거리/가격/태그 적합도 기반 정렬
+  5. 도보 시간 계산
 - **`schema.py`** — `RecommendResponse(roomNo, totalBudget, places: list[Place])`
   - `populate_by_name=True` + `Field(alias=...)` 으로 camelCase JSON ↔ snake_case 파이썬
   - 백엔드 `RecommendationResponse` (Java record) 와 1:1 매핑
+  - `Place.category`는 `한식 / 양식 / 일식 / 중식 / 기타 요식업` 중 하나를 우선 사용
 
 ### `domains/ocr/`
 - **`router.py`** ⚠ — `POST /api/v1/ocr`
@@ -174,9 +177,11 @@ FastAPI 진입점. **하는 일**:
   2. OCR 엔진 호출 (CLOVA / Tesseract / EasyOCR — 선택)
   3. 텍스트 → 상호명/금액 정규식 추출
   4. 주소 → 좌표 변환 (카카오 Geocoding)
-  5. 실패 시 `OcrFailed(message=...)` 발생
+  5. 상호명/주소를 착한가격업소 데이터와 비교해 매칭 후보 생성
+  6. 실패 시 `OcrFailed(message=...)` 발생
 - **`schema.py`** — `OcrRequest` / `OcrResponse`
   - 백엔드 `Receipt.applyOcrResult(...)` 파라미터와 매칭
+  - 착한가격업소 매칭 필드는 백엔드 `receipts.good_price_*` 컬럼과 매칭
 
 ---
 
@@ -185,7 +190,8 @@ FastAPI 진입점. **하는 일**:
 처음엔 비어있어도 됨. 도메인끼리 같은 외부 호출이 중복되기 시작하면 옮긴다.
 
 권장 분리 시점:
-- 카카오 API 클라이언트가 recommend + ocr 둘 다에서 호출됨
+- 착한가격업소 API 클라이언트가 recommend + ocr 둘 다에서 호출됨
+- 카카오 지오코딩 클라이언트가 ocr + 추천 기준 좌표 보정에 같이 쓰임
 - S3 다운로드가 ocr + future analysis 양쪽에서 필요
 - 위경도 계산이 recommend + future analysis 양쪽
 
@@ -204,7 +210,7 @@ FastAPI 진입점. **하는 일**:
 ## 5명 협업 규칙
 
 ### 1. 도메인 오너
-- `domains/recommend/` → 추천 담당
+- `domains/recommend/` → 착한가격업소 추천 담당
 - `domains/ocr/` → OCR 담당
 - `core/`, `shared/` → 모두 가능, PR은 최소 2명 승인
 
@@ -231,9 +237,9 @@ FastAPI 진입점. **하는 일**:
 1. **`.env` 작성** + `pip install -r requirements-dev.txt`
 2. **`uvicorn app.main:app --reload`** 로 띄워서 `/docs` Swagger 확인
 3. **`tests/test_health.py`** 통과 확인 (`pytest -v`)
-4. **`domains/recommend/service.py`** 본체 — 더미 데이터 먼저 반환 → 백엔드 연결 확인
-5. **카카오 로컬 API 연동** — `shared/kakao_client.py` 생성 시점
-6. **조합 최적화** 알고리즘
-7. **`domains/ocr/service.py`** 본체 — OCR 엔진 결정 후 구현
+4. **`domains/recommend/service.py`** 본체 — 착한가격업소 더미 데이터 먼저 반환 → 백엔드 연결 확인
+5. **착한가격업소 API 연동** — `shared/good_price_client.py` 생성 시점
+6. **`domains/ocr/service.py`** 본체 — OCR 엔진 결정 후 구현
+7. **OCR 결과와 착한가격업소 매칭** — 상호명/주소 유사도 기준
 8. **에러 처리** — 외부 API 실패 / 타임아웃 / 이미지 다운로드 실패
 9. **로깅 강화** — 요청 ID 추적, 외부 호출 응답 시간 등
