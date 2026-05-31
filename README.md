@@ -80,19 +80,19 @@ pytest -v
 | Method | Path | 설명 | 호출자 |
 |---|---|---|---|
 | GET  | `/api/v1/health` | 헬스 체크 | (외부) |
-| GET  | `/api/v1/recommend` | 착한가격업소 기반 추천 | Spring `RecommendationService` |
+| GET  | `/api/v1/recommend` | 후순위: AI Hub 기반 다음 태그/소비 흐름 추천 | Spring 추천 고도화 단계 |
 | POST | `/api/v1/ocr` | 영수증 OCR + 착한가격업소 매칭 후보 | Spring `ReceiptService` |
 
 ## 백엔드 연동 계약
 
-### 추천 — Spring → Python
-**Spring 호출:**
-```
-GET http://localhost:8000/api/v1/recommend
-  ?room_no=1&budget=60000&tags=한식,일식&lat=37.5&lng=126.9
-```
+### 추천 — 현재는 Spring 직접 처리
+현재 착한가격업소 추천은 Spring 백엔드의 `RecommendationService`가 행정안전부 착한가격업소 OpenAPI를 직접 호출한다.
 
-**Python 응답** (`domains/recommend/schema.py` 의 `RecommendResponse`):
+- 프론트 호출: `GET /rooms/{roomNo}/recommend?tag={tag}&region={region}&lat={lat}&lng={lng}&radius={radius}`
+- Python 서버는 현재 추천 요청 경로에 끼지 않는다.
+- AI Hub 여행로그 데이터는 후순위로, 다음 태그/소비 흐름 추천을 고도화할 때 `domains/recommend`에서 담당한다.
+
+**후순위 Python 응답 후보** (`domains/recommend/schema.py` 의 `RecommendResponse`):
 ```json
 {
   "roomNo": 1,
@@ -102,6 +102,7 @@ GET http://localhost:8000/api/v1/recommend
       "name": "정성 한식 세트",
       "category": "한식",
       "expectedPrice": 38000,
+      "menuName": "한식 세트",
       "walkTime": "도보 5분",
       "rating": 4.6,
       "thumbnailUrl": "https://...",
@@ -117,6 +118,7 @@ GET http://localhost:8000/api/v1/recommend
 추천 기준:
 - 태그는 `한식 / 양식 / 일식 / 중식 / 기타 요식업`으로 맞춘다.
 - 추천 후보는 착한가격업소 API를 우선 기준으로 한다.
+- Spring 추천 응답은 업소명, 대표 메뉴명, 가격, 주소, 좌표, 카카오맵 링크를 포함한다.
 - 사용자가 추천 외 장소를 방문한 경우에도 영수증 OCR은 가능하지만, 착한가격업소 매칭이 안 되면 방별 거지평가의 인증 점수에서는 제외한다.
 
 ### OCR — Spring → Python

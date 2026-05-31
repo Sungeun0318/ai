@@ -156,14 +156,15 @@ FastAPI 진입점. **하는 일**:
 각 도메인은 동일한 패턴: **router.py + service.py + schema.py** (+ 선택적 repository/parser).
 
 ### `domains/recommend/`
-- **`router.py`** ⚠ — `GET /api/v1/recommend` 엔드포인트
-  - Query: `room_no, budget, tags(콤마 구분), lat, lng`
-- **`service.py`** ⚠ — 추천 오케스트레이션
-  1. 지역/좌표 기준 착한가격업소 후보 수집
-  2. 앱 태그(`한식 / 양식 / 일식 / 중식 / 기타 요식업`)와 업종 매핑
-  3. 남은 예산 기준 가격대 필터
-  4. 거리/가격/태그 적합도 기반 정렬
-  5. 도보 시간 계산
+- **`router.py`** ⚠ — 후순위 `GET /api/v1/recommend` 엔드포인트 후보
+  - 현재 착한가격업소 추천은 Spring 백엔드가 직접 처리한다.
+  - Spring 응답은 업소명, 대표 메뉴명, 가격, 주소, 좌표, 카카오맵 링크를 포함한다.
+  - Python recommend 도메인은 AI Hub 여행로그 기반 다음 태그/소비 흐름 추천 고도화 때 사용한다.
+- **`service.py`** ⚠ — 추천 고도화 오케스트레이션 후보
+  1. AI Hub 여행로그/방 소비 흐름 기반 다음 태그 후보 산출
+  2. 앱 태그(`식사 / 카페 / 놀거리` 또는 세부 음식 카테고리)와 내부 추천 정책 매핑
+  3. 남은 예산, 선택 위치 좌표/반경, 방 진행 상태 기준 다음 추천 전략 생성
+  4. Spring 추천 결과를 보조하는 설명/우선순위 산출
 - **`schema.py`** — `RecommendResponse(roomNo, totalBudget, places: list[Place])`
   - `populate_by_name=True` + `Field(alias=...)` 으로 camelCase JSON ↔ snake_case 파이썬
   - 백엔드 `RecommendationResponse` (Java record) 와 1:1 매핑
@@ -190,7 +191,7 @@ FastAPI 진입점. **하는 일**:
 처음엔 비어있어도 됨. 도메인끼리 같은 외부 호출이 중복되기 시작하면 옮긴다.
 
 권장 분리 시점:
-- 착한가격업소 API 클라이언트가 recommend + ocr 둘 다에서 호출됨
+- 착한가격업소 API 클라이언트가 Spring에서 분리되어 Python recommend + ocr 둘 다에서 필요해짐
 - 카카오 지오코딩 클라이언트가 ocr + 추천 기준 좌표 보정에 같이 쓰임
 - S3 다운로드가 ocr + future analysis 양쪽에서 필요
 - 위경도 계산이 recommend + future analysis 양쪽
@@ -237,9 +238,9 @@ FastAPI 진입점. **하는 일**:
 1. **`.env` 작성** + `pip install -r requirements-dev.txt`
 2. **`uvicorn app.main:app --reload`** 로 띄워서 `/docs` Swagger 확인
 3. **`tests/test_health.py`** 통과 확인 (`pytest -v`)
-4. **`domains/recommend/service.py`** 본체 — 착한가격업소 더미 데이터 먼저 반환 → 백엔드 연결 확인
-5. **착한가격업소 API 연동** — `shared/good_price_client.py` 생성 시점
-6. **`domains/ocr/service.py`** 본체 — OCR 엔진 결정 후 구현
-7. **OCR 결과와 착한가격업소 매칭** — 상호명/주소 유사도 기준
+4. **`domains/ocr/service.py`** 본체 — OCR 엔진 결정 후 구현
+5. **OCR 결과와 착한가격업소 매칭** — 상호명/주소 유사도 기준
+6. **AI Hub 데이터 전처리** — 다음 태그/소비 흐름 추천 실험
+7. **`domains/recommend/service.py`** 본체 — Spring 추천 결과를 보조하는 고도화 로직
 8. **에러 처리** — 외부 API 실패 / 타임아웃 / 이미지 다운로드 실패
 9. **로깅 강화** — 요청 ID 추적, 외부 호출 응답 시간 등
