@@ -193,6 +193,7 @@ FastAPI 진입점. **하는 일**:
 권장 분리 시점:
 - 착한가격업소 API 클라이언트가 Spring에서 분리되어 Python recommend + ocr 둘 다에서 필요해짐
 - 카카오 지오코딩 클라이언트가 ocr + 추천 기준 좌표 보정에 같이 쓰임
+- Spring 추천 경로의 카카오 Local API 호출은 응답 지연 방지를 위해 2초 타임아웃을 기준으로 한다.
 - S3 다운로드가 ocr + future analysis 양쪽에서 필요
 - 위경도 계산이 recommend + future analysis 양쪽
 
