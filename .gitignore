@@ -72,6 +72,7 @@ nosetests.xml
 .env.*
 !.env.example
 *.env.local
+service-account-key.json
 
 # 인증서 / 키
 *.pem
