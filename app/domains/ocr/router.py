@@ -7,7 +7,8 @@
 """
 
 from fastapi import APIRouter
-
+from app.domains.ocr.schema import OcrRequest, OcrResponse
+from app.domains.ocr import service as ocr_service
 router = APIRouter()
 
 
@@ -17,3 +18,8 @@ router = APIRouter()
 #       @router.post("/ocr", response_model=OcrResponse)
 #       async def parse_receipt(request: OcrRequest) -> OcrResponse:
 #           return await ocr_service.parse(request)
+
+@router.post("/ocr", response_model=OcrResponse)
+async def parse_receipt(request: OcrRequest) -> OcrResponse:
+    # 비동기로 service의 parse 함수를 호출합니다.
+    return await ocr_service.parse(request)
