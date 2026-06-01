@@ -11,6 +11,12 @@ from app.core import health
 from app.core.config import settings
 from app.domains import ocr, recommend
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv() 
+from fastapi import FastAPI
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
