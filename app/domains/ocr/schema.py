@@ -15,9 +15,10 @@ class OcrResponse(BaseModel):
 
     receipt_id: int      = Field(alias="receiptId")
     success: bool
-    store_name: str | None = Field(default=None, alias="storeName")
-    total_amount: int | None = Field(default=None, alias="totalAmount")
-    address: str | None  = None
-    lat: float | None    = Field(default=None, alias="centerLat")
-    lng: float | None    = Field(default=None, alias="centerLng")
-    error_message: str | None = Field(default=None, alias="errorMessage")
+    full_text: str | None = Field(default=None, alias="fullText")
+    # store_name: str | None = Field(default=None, alias="storeName")
+    # total_amount: int | None = Field(default=None, alias="totalAmount")
+    # address: str | None  = None
+    # lat: float | None    = Field(default=None, alias="centerLat")
+    # lng: float | None    = Field(default=None, alias="centerLng")
+    # error_message: str | None = Field(default=None, alias="errorMessage")
