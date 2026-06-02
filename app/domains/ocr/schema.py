@@ -1,24 +1,33 @@
 """OCR 요청/응답 스키마."""
 
+from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
-
+from typing import Optional, List
 
 class OcrRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
     receipt_id: int = Field(alias="receiptId")
-    image_url: str  = Field(alias="imageUrl")
+    image_url: str = Field(alias="imageUrl")
 
+class Product(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+    name: str
+    price: int
+    quantity: int
+    amount: int
+
+class ReceiptAnalysis(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    store_name: Optional[str] = None
+    address: Optional[str] = None
+    total_amount: Optional[int] = None
+    date: Optional[str] = None
+    category: Optional[str] = None
+    products: Optional[List[Product]] = Field(default=None, alias="items")
 
 class OcrResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    receipt_id: int      = Field(alias="receiptId")
+    receipt_id: int
     success: bool
-    full_text: str | None = Field(default=None, alias="fullText")
-    # store_name: str | None = Field(default=None, alias="storeName")
-    # total_amount: int | None = Field(default=None, alias="totalAmount")
-    # address: str | None  = None
-    # lat: float | None    = Field(default=None, alias="centerLat")
-    # lng: float | None    = Field(default=None, alias="centerLng")
-    # error_message: str | None = Field(default=None, alias="errorMessage")
+    analysis: Optional[ReceiptAnalysis] = None
+
+ReceiptAnalysis.model_rebuild()
+OcrResponse.model_rebuild()
