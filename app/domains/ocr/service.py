@@ -81,8 +81,7 @@ async def parse(request: OcrRequest) -> OcrResponse:
         address=data.get("address","")
         clean_address=address.split('(')[0].strip()
 
-        room_no=getattr(request, "room_no", 1)
-        baekend_url=f'http://localhost:8080/rooms/{room_no}/receipts/{request.receipt_id}/ocr'
+        baekend_url=f'http://localhost:8080/rooms/{request.room_no}/receipts/{request.receipt_id}/ocr'
 
         payload={
             "storeName":data.get("store_name"),
