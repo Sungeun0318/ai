@@ -7,6 +7,7 @@ from typing import Optional, List
 class OcrRequest(BaseModel):
     receipt_id: int = Field(alias="receiptId")
     image_url: str = Field(alias="imageUrl")
+    room_no: int = Field(alias="roomNo")
 
 class Product(BaseModel):
     model_config = ConfigDict(extra='ignore')

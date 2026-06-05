@@ -9,7 +9,7 @@
   3) 텍스트에서 상호명/금액 정규식·룰 기반 추출
   4) 주소 → 카카오 좌표 변환 API 호출
 """
-import os, json
+import os, json, httpx
 from groq import Groq
 from dotenv import load_dotenv
 from google.cloud import vision
@@ -54,7 +54,7 @@ def analyze_with_groq(text: str):
       "address": "주소",
       "total_amount": 0,
       "date": "YYYY-MM-DD HH:MM:SS",
-      "category": "한식|양식|중식|일식|기타 요식업 중 택 1",,
+      "category": "한식|양식|중식|일식|기타 요식업 중 택 1",
       "items": [
         {{ "name": "상품명", "price": 0, "quantity": 0, "amount": 0 }}
       ]
@@ -67,25 +67,41 @@ def analyze_with_groq(text: str):
         response_format={"type": "json_object"}
     )
     raw_content=response.choices[0].message.content
-    print("[GROQ RESPONSE]")
-    print(raw_content)
-
     return json.loads(raw_content)
 
 async def parse(request: OcrRequest) -> OcrResponse:
     try:
         all_text = detect_all_text_from_url(request.image_url)
         if not all_text:
-            return OcrResponse(receipt_id=request.receipt_id, success=False, error_message="OCR 실패")
+            return OcrResponse(receipt_id=request.receipt_id, success=False)
         
         data=analyze_with_groq(all_text)
         analysis = ReceiptAnalysis(**data)
+
+        address=data.get("address","")
+        clean_address=address.split('(')[0].strip()
+
+        baekend_url=f'http://localhost:8080/rooms/{request.room_no}/receipts/{request.receipt_id}/ocr'
+
+        payload={
+            "storeName":data.get("store_name"),
+            "address":clean_address,
+            "totalAmount":data.get("total_amount"),
+            "amount":data.get("total_amount")
+        }
+
+        async with httpx.AsyncClient() as client:
+            response=await client.put(baekend_url, json=payload)
+            if response.status_code==200:
+                print(f"백엔드 업데이트 성공: {request.receipt_id}")
+            else:
+                print(f"백엔드 업데이트 실패: {response.status_code} - {response.text}")
         
         return OcrResponse(
             receipt_id=request.receipt_id,
             success=True,
-            full_text=all_text,
             analysis=analysis
         )
     except Exception as e:
-        return OcrResponse(receipt_id=request.receipt_id, success=False, error_message=str(e))
+        print(f"OCR Error: {e}")
+        return OcrResponse(receipt_id=request.receipt_id, success=False)
