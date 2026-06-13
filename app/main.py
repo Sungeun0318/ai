@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import health
 from app.core.config import settings
-from app.domains import ocr, recommend
+from app.domains import recommend
 
 import os
 from dotenv import load_dotenv
@@ -20,7 +20,7 @@ from fastapi import FastAPI
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
-    description="거지 우정 수호대 — AI 추천/OCR 서버",
+    description="거지 우정 수호대 — AI 서버 (추천/학습 모델, OCR은 백엔드 담당)",
 )
 
 # CORS — 백엔드만 호출하면 사실 불필요하지만, 로컬 디버깅용으로 열어둠
@@ -35,4 +35,3 @@ app.add_middleware(
 # 라우터 등록 (도메인별, /api/v1 통합 prefix)
 app.include_router(health.router,    prefix="/api/v1", tags=["health"])
 app.include_router(recommend.router, prefix="/api/v1", tags=["recommend"])
-app.include_router(ocr.router,       prefix="/api/v1", tags=["ocr"])

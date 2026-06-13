@@ -6,9 +6,13 @@
 
 - FastAPI + Uvicorn 기반.
 - `/api/v1/health` 구현 완료.
-- `/api/v1/ocr` 구현 중이며 현재 Google Cloud Vision으로 텍스트를 읽고 Groq LLM으로 영수증 JSON을 분석한다.
-- OCR 분석 후 백엔드 `PUT /rooms/{roomNo}/receipts/{receiptId}/ocr`를 호출해 결과를 반영한다.
-- `/api/v1/recommend` 도메인은 라우터/스키마/서비스 골격만 있고 실제 추천은 Spring 백엔드가 직접 처리한다.
+- `/api/v1/recommend` 도메인은 라우터/스키마/서비스 골격만 있는 스텁이다. 실제 추천은 현재 Spring 백엔드가 직접 처리한다.
+- **OCR은 이 서버에서 처리하지 않는다.** 영수증 OCR(Google Vision + Groq)은 Spring 백엔드가 자체적으로 수행하고 결과를 DB에 직접 반영한다. (과거에 있던 AI OCR 도메인/콜백은 사용하지 않기로 하여 제거됨)
+
+## 방향 (예정)
+
+- 이 서버의 향후 목적은 **학습시킨 Python 모델을 FastAPI로 제공**하는 것이다 (추천 고도화 또는 별도 예측 모델).
+- 백엔드가 이 서버를 호출하는 형태가 되면 백엔드의 `aiServerWebClient`(base-url = `ai-server.base-url`)로 연동한다.
 
 ## 실행
 
@@ -39,15 +43,10 @@ http://localhost:8000/docs
 주요 값:
 
 ```text
-GROQ_API_KEY=Groq API key
-BACKEND_BASE_URL=http://localhost:8080
+BACKEND_BASE_URL=http://localhost:8080   # 향후 모델→백엔드 연동 후보
 KAKAO_REST_API_KEY=후속 추천/지오코딩 후보
-AWS_*=S3 다운로드 후보
+AWS_*=S3 접근 후보
 ```
-
-현재 `ocr/service.py`에는 백엔드 URL이 `http://localhost:8080`로 직접 들어가 있다. 배포 전에는 `settings.backend_base_url` 사용으로 바꿔야 한다.
-
-Google Vision은 `service-account-key.json` 파일을 기준으로 인증한다.
 
 ## 구조
 
@@ -61,10 +60,6 @@ ai/
 │   │   ├── health.py
 │   │   └── logging.py
 │   └── domains/
-│       ├── ocr/
-│       │   ├── router.py
-│       │   ├── schema.py
-│       │   └── service.py
 │       └── recommend/
 │           ├── router.py
 │           ├── schema.py
@@ -78,66 +73,7 @@ ai/
 | Method | Path | 상태 | 설명 |
 |---|---|---|---|
 | `GET` | `/api/v1/health` | 구현 완료 | `{"status":"ok"}` |
-| `POST` | `/api/v1/ocr` | 구현 중 | 영수증 이미지 OCR/분석 후 백엔드에 반영 |
-| `GET` | `/api/v1/recommend` | 스텁 | 후속 AI 추천 고도화 후보 |
-
-## OCR 요청/응답
-
-요청:
-
-```json
-{
-  "receiptId": 42,
-  "roomNo": 1,
-  "imageUrl": "https://..."
-}
-```
-
-응답:
-
-```json
-{
-  "receipt_id": 42,
-  "success": true,
-  "analysis": {
-    "store_name": "상호명",
-    "address": "주소",
-    "total_amount": 30000,
-    "date": "2026-06-13 12:00:00",
-    "category": "한식",
-    "items": [
-      {
-        "name": "메뉴",
-        "price": 10000,
-        "quantity": 1,
-        "amount": 10000
-      }
-    ]
-  }
-}
-```
-
-## OCR 내부 흐름
-
-```text
-POST /api/v1/ocr
-  -> Google Vision text_detection(imageUrl)
-  -> Groq llama-3.3-70b-versatile JSON 분석
-  -> 주소 괄호 내용 제거
-  -> PUT http://localhost:8080/rooms/{roomNo}/receipts/{receiptId}/ocr
-  -> OcrResponse 반환
-```
-
-백엔드 반영 payload:
-
-```json
-{
-  "storeName": "상호명",
-  "address": "정제 주소",
-  "totalAmount": 30000,
-  "amount": 30000
-}
-```
+| `GET` | `/api/v1/recommend` | 스텁 | 후속 AI 모델 도메인 후보 |
 
 ## 추천 도메인
 
@@ -149,7 +85,7 @@ Spring API:
 GET /rooms/{roomNo}/recommend?tag=&region=&lat=&lng=&radius=
 ```
 
-AI `recommend` 도메인은 후속 작업에서 다음 태그/소비 흐름 추천, AI Hub 데이터 기반 고도화 등을 붙이는 후보 영역이다.
+AI `recommend` 도메인은 후속 작업에서 학습 모델 기반 추천 등을 붙일 후보 영역이다.
 
 ## 테스트
 
@@ -160,4 +96,4 @@ pytest -v
 ## 참고
 
 - 전체 기능 명세: `../docs/APP_FEATURES.md`
-- 백엔드 README: `../backend/README.md`
+- 백엔드 README: `../backend/README.md` (OCR은 백엔드 내장)
