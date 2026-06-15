@@ -4,6 +4,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pycache-check/
 *.so
 .Python
 
@@ -100,7 +101,15 @@ GoogleService-Info.plist
 *.tflite
 *.bin
 data/
+!data/
+data/*
+!data/sample/
+!data/sample/.gitkeep
+!data/models/
+!data/models/.gitkeep
 models/
+!data/models/
+!data/models/.gitkeep
 checkpoints/
 datasets/
 artifacts/

@@ -9,13 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import health
 from app.core.config import settings
-from app.domains import recommend
+from app.domains import insights, predictions, recommend
 
-import os
 from dotenv import load_dotenv
 
-load_dotenv() 
-from fastapi import FastAPI
+load_dotenv()
 
 app = FastAPI(
     title=settings.app_name,
@@ -35,3 +33,5 @@ app.add_middleware(
 # 라우터 등록 (도메인별, /api/v1 통합 prefix)
 app.include_router(health.router,    prefix="/api/v1", tags=["health"])
 app.include_router(recommend.router, prefix="/api/v1", tags=["recommend"])
+app.include_router(insights.router, prefix="/api/v1", tags=["insights"])
+app.include_router(predictions.router, prefix="/api/v1", tags=["predictions"])

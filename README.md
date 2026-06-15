@@ -7,6 +7,8 @@
 - FastAPI + Uvicorn 기반.
 - `/api/v1/health` 구현 완료.
 - `/api/v1/recommend` 도메인은 라우터/스키마/서비스 골격만 있는 스텁이다. 실제 추천은 현재 Spring 백엔드가 직접 처리한다.
+- `/api/v1/insights/spending-summary` 소비 인사이트 분석 API 골격 구현.
+- `/api/v1/predictions/budget-risk` 예산 초과 위험도 예측 API 골격 구현.
 - **OCR은 이 서버에서 처리하지 않는다.** 영수증 OCR(Google Vision + Groq)은 Spring 백엔드가 자체적으로 수행하고 결과를 DB에 직접 반영한다. (과거에 있던 AI OCR 도메인/콜백은 사용하지 않기로 하여 제거됨)
 
 ## 방향 (예정)
@@ -22,6 +24,18 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+권장 Python 버전:
+
+```text
+Python 3.11 ~ 3.13
+```
+
+주의:
+
+```text
+Python 3.14는 현재 requirements의 pydantic-core 빌드가 실패할 수 있다.
 ```
 
 주소:
@@ -60,12 +74,30 @@ ai/
 │   │   ├── health.py
 │   │   └── logging.py
 │   └── domains/
+│       ├── insights/
+│       │   ├── router.py
+│       │   ├── schema.py
+│       │   └── service.py
+│       ├── predictions/
+│       │   ├── router.py
+│       │   ├── schema.py
+│       │   ├── features.py
+│       │   ├── model.py
+│       │   └── service.py
 │       └── recommend/
 │           ├── router.py
 │           ├── schema.py
 │           └── service.py
+├── data/
+│   ├── sample/
+│   └── models/
+├── scripts/
+│   ├── generate_sample_receipts.py
+│   └── train_budget_risk_model.py
 └── tests/
-    └── test_health.py
+    ├── test_health.py
+    ├── test_insights.py
+    └── test_predictions.py
 ```
 
 ## API
@@ -74,6 +106,8 @@ ai/
 |---|---|---|---|
 | `GET` | `/api/v1/health` | 구현 완료 | `{"status":"ok"}` |
 | `GET` | `/api/v1/recommend` | 스텁 | 후속 AI 모델 도메인 후보 |
+| `POST` | `/api/v1/insights/spending-summary` | 골격 구현 | 관리자 소비 인사이트 분석 |
+| `POST` | `/api/v1/predictions/budget-risk` | 골격 구현 | 예산 초과 위험도 예측 |
 
 ## 추천 도메인
 
