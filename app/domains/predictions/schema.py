@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,8 +18,8 @@ class BudgetRiskRoomItem(BaseModel):
     tag: Optional[str] = None
     member_count: Optional[int] = Field(default=None, alias="memberCount")
     status: Optional[str] = None
-    room_created: Optional[datetime] = Field(default=None, alias="roomCreated")
-    ended_at: Optional[datetime] = Field(default=None, alias="endedAt")
+    room_created: Optional[Any] = Field(default=None, alias="roomCreated")
+    ended_at: Optional[Any] = Field(default=None, alias="endedAt")
 
 
 class BudgetRiskReceiptItem(BaseModel):
@@ -29,7 +29,7 @@ class BudgetRiskReceiptItem(BaseModel):
     amount: int
     receipt_type: Optional[str] = Field(default=None, alias="receiptType")
     good_price_matched: bool = Field(default=False, alias="goodPriceMatched")
-    receipt_issued_at: Optional[datetime] = Field(default=None, alias="receiptIssuedAt")
+    receipt_issued_at: Optional[Any] = Field(default=None, alias="receiptIssuedAt")
 
 
 class BudgetRiskBudgetItem(BaseModel):
@@ -37,7 +37,7 @@ class BudgetRiskBudgetItem(BaseModel):
 
     room_no: int = Field(alias="roomNo")
     budget_amount: int = Field(alias="budgetAmount")
-    submitted_at: Optional[datetime] = Field(default=None, alias="submittedAt")
+    submitted_at: Optional[Any] = Field(default=None, alias="submittedAt")
 
 
 class BudgetRiskRequest(BaseModel):
