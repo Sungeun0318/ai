@@ -12,22 +12,22 @@ def predict_budget_risk(features: dict) -> dict:
     receipt_count = features["receipt_count"]
     good_price_usage_rate = features["good_price_usage_rate"]
 
-    score = min(budget_usage_rate * 0.55, 60)
+    score = base_budget_usage_score(budget_usage_rate)
 
     if avg_receipt_amount > 0 and remaining_budget < avg_receipt_amount:
-        score += 25
+        score += 4
     elif avg_receipt_amount > 0 and remaining_budget < avg_receipt_amount * 2:
-        score += 12
+        score += 2
 
     if receipt_count >= 10:
-        score += 10
+        score += 3
     elif receipt_count >= 5:
-        score += 5
+        score += 1.5
 
     if good_price_usage_rate < 20:
-        score += 5
+        score += 2
 
-    risk_score = round(min(score, 100), 1)
+    risk_score = round(min(score, 95), 1)
     risk_level = risk_level_from_score(risk_score)
     predicted_final_spent = predict_final_spent(features, risk_score)
     predicted_usage_rate = (
@@ -44,6 +44,20 @@ def predict_budget_risk(features: dict) -> dict:
         "recommended_next_spend_limit": recommended_next_spend_limit(features),
         "reason": risk_reason(features, risk_level),
     }
+
+
+def base_budget_usage_score(budget_usage_rate: float) -> float:
+    if budget_usage_rate <= 0:
+        return 5
+    if budget_usage_rate < 60:
+        return 10 + (budget_usage_rate / 60) * 25
+    if budget_usage_rate < 100:
+        return 40 + ((budget_usage_rate - 60) / 40) * 25
+    if budget_usage_rate < 150:
+        return 70 + ((budget_usage_rate - 100) / 50) * 8
+    if budget_usage_rate < 250:
+        return 78 + ((budget_usage_rate - 150) / 100) * 10
+    return 88 + min(((budget_usage_rate - 250) / 500) * 7, 7)
 
 
 def risk_level_from_score(score: float) -> str:
