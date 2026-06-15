@@ -3,8 +3,53 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.domains.insights.schema import SpendingInsightRequest
 
 client = TestClient(app)
+
+
+def test_spending_insight_schema_accepts_backend_json_aliases():
+    request = SpendingInsightRequest.model_validate(
+        {
+            "rooms": [
+                {
+                    "roomNo": 1,
+                    "roomName": "강남 점심방",
+                    "location": "서울 강남구",
+                    "tag": "한식",
+                    "totalBudget": 60000,
+                    "memberCount": 3,
+                    "status": "ENDED",
+                }
+            ],
+            "receipts": [
+                {
+                    "receiptId": 10,
+                    "roomNo": 1,
+                    "amount": 8500,
+                    "storeName": "국밥집",
+                    "receiptType": "COMBINED",
+                    "goodPriceMatched": True,
+                    "receiptIssuedAt": "2026-06-15T12:10:00",
+                }
+            ],
+            "recommendationInteractions": [
+                {
+                    "roomNo": 1,
+                    "requestedTag": "한식",
+                    "action": "CLICK",
+                    "expectedPrice": 8500,
+                    "createdAt": "2026-06-15T12:00:00",
+                }
+            ],
+        }
+    )
+
+    assert request.rooms[0].room_no == 1
+    assert request.rooms[0].total_budget == 60000
+    assert request.receipts[0].receipt_id == 10
+    assert request.receipts[0].good_price_matched is True
+    assert request.recommendation_interactions[0].requested_tag == "한식"
 
 
 def test_spending_summary_empty_payload():
