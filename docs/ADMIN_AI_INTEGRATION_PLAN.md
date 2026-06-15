@@ -27,6 +27,96 @@ AI 서버에 구현된 1차/2차 기능을 관리자 웹에서 확인할 수 있
 관리자 웹은 DB를 직접 분석하지 않는다.
 운영 DB 조회와 AI 서버 호출은 백엔드가 담당한다.
 
+## 서버 구성
+
+AI 기능 연동 후 운영 서버는 총 3개로 나눈다.
+
+```text
+1. beggar-backend
+   - Spring Boot API 서버
+   - 운영 DB 조회
+   - 사용자/방/영수증/관리자 API 담당
+   - AI 서버로 분석 요청 전달
+
+2. beggar-admin
+   - Spring Boot + JSP 관리자 웹
+   - 관리자 로그인/화면 렌더링 담당
+   - 백엔드 /admin/ai/** API 호출
+
+3. beggar-ai
+   - FastAPI Python AI 서버
+   - 1차 소비 인사이트 통계 계산
+   - 2차 예산 초과 위험도 예측
+```
+
+운영 호출 흐름:
+
+```text
+관리자 브라우저
+→ beggar-admin Elastic Beanstalk
+→ beggar-backend Elastic Beanstalk
+→ beggar-ai Elastic Beanstalk
+```
+
+## AI 서버 배포 계획
+
+### 배포 브랜치
+
+AI 저장소에 배포 전용 브랜치를 둔다.
+
+```text
+sungeun     # 개발 브랜치
+deploy-ai   # AI 서버 배포 브랜치
+```
+
+작업 흐름:
+
+```text
+sungeun에서 기능 구현/검증
+→ deploy-ai로 merge
+→ GitHub Actions 또는 EB CLI로 Elastic Beanstalk 자동 배포
+```
+
+### Elastic Beanstalk 실행 방식
+
+FastAPI는 `uvicorn`으로 실행한다.
+
+```text
+web: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+필요 파일:
+
+```text
+Procfile
+requirements.txt
+.ebextensions/ 또는 GitHub Actions workflow
+```
+
+### AI 서버 환경 변수
+
+초기에는 필수 비밀값이 없다.
+추후 모델 파일 경로나 운영 모드가 필요하면 아래처럼 추가한다.
+
+```properties
+APP_ENV=prod
+MODEL_DIR=data/models
+```
+
+### 백엔드 연결 설정
+
+백엔드는 배포된 AI 서버 주소를 환경 변수로 가진다.
+
+```properties
+ai.server.url=http://beggar-ai-env.eba-xxxxx.ap-northeast-2.elasticbeanstalk.com
+```
+
+주의:
+
+- 관리자 웹은 AI 서버를 직접 호출하지 않는다.
+- 백엔드만 AI 서버 URL을 알고 있으면 된다.
+- AI 서버 URL이 바뀌면 백엔드 EB 환경 변수만 수정한다.
+
 ## 화면 구성
 
 ### 1차: 소비 인사이트
