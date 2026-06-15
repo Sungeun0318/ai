@@ -41,7 +41,7 @@ def _build_rooms_frame(request: SpendingInsightRequest) -> pd.DataFrame:
     rows = [
         {
             "room_no": room.room_no,
-            "room_name": room.room_name,
+            "room_name": room.room_name or "",
             "location": room.location or "미분류",
             "total_budget": max(room.total_budget or 0, 0),
         }

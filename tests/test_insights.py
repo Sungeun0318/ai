@@ -65,6 +65,44 @@ def test_spending_summary_empty_payload():
     assert body["topRegions"] == []
 
 
+def test_spending_summary_accepts_nullable_operating_fields():
+    response = client.post(
+        "/api/v1/insights/spending-summary",
+        json={
+            "rooms": [
+                {
+                    "roomNo": 1,
+                    "roomName": None,
+                    "location": None,
+                    "totalBudget": None,
+                }
+            ],
+            "receipts": [
+                {
+                    "receiptId": 1,
+                    "roomNo": 1,
+                    "amount": 1000,
+                    "goodPriceMatched": False,
+                }
+            ],
+            "recommendationInteractions": [
+                {
+                    "roomNo": 1,
+                    "requestedTag": None,
+                    "action": None,
+                    "expectedPrice": None,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["totalSpentAmount"] == 1000
+    assert body["topRegions"] == [{"region": "미분류", "spentAmount": 1000}]
+    assert body["tagClicks"] == []
+
+
 def test_spending_summary_calculates_basic_metrics():
     response = client.post(
         "/api/v1/insights/spending-summary",

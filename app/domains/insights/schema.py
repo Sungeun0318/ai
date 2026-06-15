@@ -12,8 +12,8 @@ class RoomInsightItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     room_no: int = Field(alias="roomNo")
-    room_name: str = Field(default="", alias="roomName")
-    location: str = ""
+    room_name: Optional[str] = Field(default=None, alias="roomName")
+    location: Optional[str] = None
     tag: Optional[str] = None
     total_budget: Optional[int] = Field(default=None, alias="totalBudget")
     member_count: Optional[int] = Field(default=None, alias="memberCount")
@@ -37,7 +37,7 @@ class RecommendationInteractionItem(BaseModel):
 
     room_no: int = Field(alias="roomNo")
     requested_tag: Optional[str] = Field(default=None, alias="requestedTag")
-    action: str
+    action: Optional[str] = None
     expected_price: Optional[int] = Field(default=None, alias="expectedPrice")
     created_at: Optional[datetime] = Field(default=None, alias="createdAt")
 
