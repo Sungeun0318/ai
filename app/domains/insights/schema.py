@@ -45,10 +45,10 @@ class RecommendationInteractionItem(BaseModel):
 class SpendingInsightRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    rooms: list[RoomInsightItem] = []
-    receipts: list[ReceiptInsightItem] = []
+    rooms: list[RoomInsightItem] = Field(default_factory=list)
+    receipts: list[ReceiptInsightItem] = Field(default_factory=list)
     recommendation_interactions: list[RecommendationInteractionItem] = Field(
-        default=[],
+        default_factory=list,
         alias="recommendationInteractions",
     )
 

@@ -1,10 +1,8 @@
-"""관리자 소비 인사이트 계산 로직.
+"""관리자 소비 인사이트 계산 로직."""
 
-초기 버전은 추가 의존성 없이 순수 Python으로 계산한다.
-pandas 기반 상세 분석은 PHASE1 기획 문서 Step 3에서 확장한다.
-"""
+from __future__ import annotations
 
-from collections import Counter, defaultdict
+import pandas as pd
 
 from app.domains.insights.schema import (
     HighBudgetUsageRoom,
@@ -17,51 +15,14 @@ from app.domains.insights.schema import (
 
 
 def build_spending_summary(request: SpendingInsightRequest) -> SpendingInsightResponse:
-    room_by_no = {room.room_no: room for room in request.rooms}
-    spent_by_room: dict[int, int] = defaultdict(int)
+    rooms_df = _build_rooms_frame(request)
+    receipts_df = _build_receipts_frame(request)
+    interactions_df = _build_interactions_frame(request)
 
-    total_spent = 0
-    for receipt in request.receipts:
-        amount = max(receipt.amount, 0)
-        total_spent += amount
-        spent_by_room[receipt.room_no] += amount
-
-    average_receipt = int(total_spent / len(request.receipts)) if request.receipts else 0
-    budget_over_count = sum(
-        1
-        for room in request.rooms
-        if room.total_budget and spent_by_room.get(room.room_no, 0) > room.total_budget
-    )
-    budget_over_rate = round((budget_over_count / len(request.rooms)) * 100, 1) if request.rooms else 0.0
-
-    good_price_count = sum(1 for receipt in request.receipts if receipt.good_price_matched)
-    good_price_rate = round((good_price_count / len(request.receipts)) * 100, 1) if request.receipts else 0.0
-
-    region_spending: dict[str, int] = defaultdict(int)
-    for room_no, spent in spent_by_room.items():
-        region = room_by_no.get(room_no).location if room_no in room_by_no else "미분류"
-        region_spending[region or "미분류"] += spent
-
-    tag_click_counter = Counter(
-        interaction.requested_tag or "미분류"
-        for interaction in request.recommendation_interactions
-        if interaction.action.upper() == "CLICK"
-    )
-
-    usage_rooms = []
-    for room in request.rooms:
-        total_budget = room.total_budget or 0
-        spent = spent_by_room.get(room.room_no, 0)
-        usage_rate = round((spent / total_budget) * 100, 1) if total_budget > 0 else 0.0
-        usage_rooms.append(
-            HighBudgetUsageRoom(
-                roomNo=room.room_no,
-                roomName=room.room_name,
-                totalBudget=total_budget,
-                spentAmount=spent,
-                usageRate=usage_rate,
-            )
-        )
+    total_spent = int(receipts_df["amount"].sum()) if not receipts_df.empty else 0
+    average_receipt = int(receipts_df["amount"].mean()) if not receipts_df.empty else 0
+    budget_over_rate = _calculate_budget_over_rate(rooms_df, receipts_df)
+    good_price_rate = _calculate_good_price_usage_rate(receipts_df)
 
     return SpendingInsightResponse(
         summary=SpendingSummary(
@@ -70,13 +31,150 @@ def build_spending_summary(request: SpendingInsightRequest) -> SpendingInsightRe
             budgetOverRoomRate=budget_over_rate,
             goodPriceUsageRate=good_price_rate,
         ),
-        topRegions=[
-            RegionSpending(region=region, spentAmount=spent)
-            for region, spent in sorted(region_spending.items(), key=lambda item: item[1], reverse=True)[:5]
-        ],
-        tagClicks=[
-            TagClickCount(tag=tag, clickCount=count)
-            for tag, count in tag_click_counter.most_common()
-        ],
-        highBudgetUsageRooms=sorted(usage_rooms, key=lambda room: room.usage_rate, reverse=True)[:10],
+        topRegions=_build_top_regions(rooms_df, receipts_df),
+        tagClicks=_build_tag_clicks(interactions_df),
+        highBudgetUsageRooms=_build_high_budget_usage_rooms(rooms_df, receipts_df),
     )
+
+
+def _build_rooms_frame(request: SpendingInsightRequest) -> pd.DataFrame:
+    rows = [
+        {
+            "room_no": room.room_no,
+            "room_name": room.room_name,
+            "location": room.location or "미분류",
+            "total_budget": max(room.total_budget or 0, 0),
+        }
+        for room in request.rooms
+    ]
+    return pd.DataFrame(rows, columns=["room_no", "room_name", "location", "total_budget"])
+
+
+def _build_receipts_frame(request: SpendingInsightRequest) -> pd.DataFrame:
+    rows = [
+        {
+            "receipt_id": receipt.receipt_id,
+            "room_no": receipt.room_no,
+            "amount": max(receipt.amount, 0),
+            "good_price_matched": bool(receipt.good_price_matched),
+        }
+        for receipt in request.receipts
+    ]
+    return pd.DataFrame(rows, columns=["receipt_id", "room_no", "amount", "good_price_matched"])
+
+
+def _build_interactions_frame(request: SpendingInsightRequest) -> pd.DataFrame:
+    rows = [
+        {
+            "room_no": interaction.room_no,
+            "requested_tag": interaction.requested_tag or "미분류",
+            "action": interaction.action or "",
+        }
+        for interaction in request.recommendation_interactions
+    ]
+    return pd.DataFrame(rows, columns=["room_no", "requested_tag", "action"])
+
+
+def _room_spending_frame(receipts_df: pd.DataFrame) -> pd.DataFrame:
+    if receipts_df.empty:
+        return pd.DataFrame(columns=["room_no", "spent_amount"])
+
+    return (
+        receipts_df.groupby("room_no", as_index=False)["amount"]
+        .sum()
+        .rename(columns={"amount": "spent_amount"})
+    )
+
+
+def _rooms_with_spending(rooms_df: pd.DataFrame, receipts_df: pd.DataFrame) -> pd.DataFrame:
+    spending_df = _room_spending_frame(receipts_df)
+    merged_df = rooms_df.merge(spending_df, on="room_no", how="left")
+    merged_df["spent_amount"] = merged_df["spent_amount"].fillna(0).astype(int)
+    merged_df["usage_rate"] = 0.0
+
+    has_budget = merged_df["total_budget"] > 0
+    merged_df.loc[has_budget, "usage_rate"] = (
+        merged_df.loc[has_budget, "spent_amount"] / merged_df.loc[has_budget, "total_budget"] * 100
+    ).round(1)
+    return merged_df
+
+
+def _calculate_budget_over_rate(rooms_df: pd.DataFrame, receipts_df: pd.DataFrame) -> float:
+    if rooms_df.empty:
+        return 0.0
+
+    usage_df = _rooms_with_spending(rooms_df, receipts_df)
+    over_count = int(((usage_df["total_budget"] > 0) & (usage_df["spent_amount"] > usage_df["total_budget"])).sum())
+    return round((over_count / len(rooms_df)) * 100, 1)
+
+
+def _calculate_good_price_usage_rate(receipts_df: pd.DataFrame) -> float:
+    if receipts_df.empty:
+        return 0.0
+
+    return round(float(receipts_df["good_price_matched"].mean() * 100), 1)
+
+
+def _build_top_regions(rooms_df: pd.DataFrame, receipts_df: pd.DataFrame) -> list[RegionSpending]:
+    if receipts_df.empty:
+        return []
+
+    spending_df = _room_spending_frame(receipts_df)
+    region_df = spending_df.merge(rooms_df[["room_no", "location"]], on="room_no", how="left")
+    region_df["location"] = region_df["location"].fillna("미분류")
+    grouped_df = (
+        region_df.groupby("location", as_index=False)["spent_amount"]
+        .sum()
+        .sort_values(["spent_amount", "location"], ascending=[False, True])
+        .head(5)
+    )
+
+    return [
+        RegionSpending(region=row.location, spentAmount=int(row.spent_amount))
+        for row in grouped_df.itertuples(index=False)
+    ]
+
+
+def _build_tag_clicks(interactions_df: pd.DataFrame) -> list[TagClickCount]:
+    if interactions_df.empty:
+        return []
+
+    click_df = interactions_df[interactions_df["action"].str.upper() == "CLICK"].copy()
+    if click_df.empty:
+        return []
+
+    grouped_df = (
+        click_df.groupby("requested_tag", as_index=False)
+        .size()
+        .rename(columns={"size": "click_count"})
+        .sort_values(["click_count", "requested_tag"], ascending=[False, True])
+    )
+
+    return [
+        TagClickCount(tag=row.requested_tag, clickCount=int(row.click_count))
+        for row in grouped_df.itertuples(index=False)
+    ]
+
+
+def _build_high_budget_usage_rooms(
+    rooms_df: pd.DataFrame,
+    receipts_df: pd.DataFrame,
+) -> list[HighBudgetUsageRoom]:
+    if rooms_df.empty:
+        return []
+
+    usage_df = _rooms_with_spending(rooms_df, receipts_df).sort_values(
+        ["usage_rate", "spent_amount", "room_no"],
+        ascending=[False, False, True],
+    )
+
+    return [
+        HighBudgetUsageRoom(
+            roomNo=int(row.room_no),
+            roomName=row.room_name,
+            totalBudget=int(row.total_budget),
+            spentAmount=int(row.spent_amount),
+            usageRate=float(row.usage_rate),
+        )
+        for row in usage_df.head(10).itertuples(index=False)
+    ]

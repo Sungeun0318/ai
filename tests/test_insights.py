@@ -72,3 +72,62 @@ def test_spending_summary_calculates_basic_metrics():
     assert body["summary"]["goodPriceUsageRate"] == 50.0
     assert body["topRegions"][0]["region"] == "서울 강남구"
     assert body["tagClicks"][0]["tag"] == "한식"
+
+
+def test_spending_summary_groups_regions_tags_and_budget_usage():
+    response = client.post(
+        "/api/v1/insights/spending-summary",
+        json={
+            "rooms": [
+                {
+                    "roomNo": 1,
+                    "roomName": "강남 점심방",
+                    "location": "서울 강남구",
+                    "totalBudget": 20000,
+                },
+                {
+                    "roomNo": 2,
+                    "roomName": "종로 저녁방",
+                    "location": "서울 종로구",
+                    "totalBudget": 10000,
+                },
+                {
+                    "roomNo": 3,
+                    "roomName": "예산 없는 방",
+                    "location": "",
+                    "totalBudget": 0,
+                },
+            ],
+            "receipts": [
+                {"receiptId": 1, "roomNo": 1, "amount": 5000, "goodPriceMatched": True},
+                {"receiptId": 2, "roomNo": 1, "amount": 15000, "goodPriceMatched": True},
+                {"receiptId": 3, "roomNo": 2, "amount": 12000, "goodPriceMatched": False},
+                {"receiptId": 4, "roomNo": 99, "amount": 7000, "goodPriceMatched": False},
+            ],
+            "recommendationInteractions": [
+                {"roomNo": 1, "requestedTag": "한식", "action": "CLICK"},
+                {"roomNo": 1, "requestedTag": "한식", "action": "CLICK"},
+                {"roomNo": 2, "requestedTag": "카페", "action": "CLICK"},
+                {"roomNo": 2, "requestedTag": "카페", "action": "VIEW"},
+                {"roomNo": 3, "requestedTag": None, "action": "CLICK"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["summary"]["totalSpentAmount"] == 39000
+    assert body["summary"]["budgetOverRoomRate"] == 33.3
+    assert body["topRegions"] == [
+        {"region": "서울 강남구", "spentAmount": 20000},
+        {"region": "서울 종로구", "spentAmount": 12000},
+        {"region": "미분류", "spentAmount": 7000},
+    ]
+    assert body["tagClicks"] == [
+        {"tag": "한식", "clickCount": 2},
+        {"tag": "미분류", "clickCount": 1},
+        {"tag": "카페", "clickCount": 1},
+    ]
+    assert body["highBudgetUsageRooms"][0]["roomNo"] == 2
+    assert body["highBudgetUsageRooms"][0]["usageRate"] == 120.0
