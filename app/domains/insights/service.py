@@ -43,9 +43,10 @@ def _build_rooms_frame(request: SpendingInsightRequest) -> pd.DataFrame:
             "room_no": room.room_no,
             "room_name": room.room_name or "",
             "location": room.location or "미분류",
-            "total_budget": max(room.total_budget or 0, 0),
+            "total_budget": _non_negative_int(room.total_budget),
         }
         for room in request.rooms
+        if room.room_no is not None
     ]
     return pd.DataFrame(rows, columns=["room_no", "room_name", "location", "total_budget"])
 
@@ -55,10 +56,11 @@ def _build_receipts_frame(request: SpendingInsightRequest) -> pd.DataFrame:
         {
             "receipt_id": receipt.receipt_id,
             "room_no": receipt.room_no,
-            "amount": max(receipt.amount, 0),
+            "amount": _non_negative_int(receipt.amount),
             "good_price_matched": bool(receipt.good_price_matched),
         }
         for receipt in request.receipts
+        if receipt.room_no is not None
     ]
     return pd.DataFrame(rows, columns=["receipt_id", "room_no", "amount", "good_price_matched"])
 
@@ -71,8 +73,13 @@ def _build_interactions_frame(request: SpendingInsightRequest) -> pd.DataFrame:
             "action": interaction.action or "",
         }
         for interaction in request.recommendation_interactions
+        if interaction.room_no is not None
     ]
     return pd.DataFrame(rows, columns=["room_no", "requested_tag", "action"])
+
+
+def _non_negative_int(value: int | None) -> int:
+    return max(int(value or 0), 0)
 
 
 def _room_spending_frame(receipts_df: pd.DataFrame) -> pd.DataFrame:

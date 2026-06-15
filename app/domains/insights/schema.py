@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class RoomInsightItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    room_no: int = Field(alias="roomNo")
+    room_no: Optional[int] = Field(default=None, alias="roomNo")
     room_name: Optional[str] = Field(default=None, alias="roomName")
     location: Optional[str] = None
     tag: Optional[str] = None
@@ -23,23 +22,23 @@ class RoomInsightItem(BaseModel):
 class ReceiptInsightItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    receipt_id: int = Field(alias="receiptId")
-    room_no: int = Field(alias="roomNo")
-    amount: int
+    receipt_id: Optional[int] = Field(default=None, alias="receiptId")
+    room_no: Optional[int] = Field(default=None, alias="roomNo")
+    amount: Optional[int] = None
     store_name: Optional[str] = Field(default=None, alias="storeName")
     receipt_type: Optional[str] = Field(default=None, alias="receiptType")
     good_price_matched: bool = Field(default=False, alias="goodPriceMatched")
-    receipt_issued_at: Optional[datetime] = Field(default=None, alias="receiptIssuedAt")
+    receipt_issued_at: Optional[Any] = Field(default=None, alias="receiptIssuedAt")
 
 
 class RecommendationInteractionItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    room_no: int = Field(alias="roomNo")
+    room_no: Optional[int] = Field(default=None, alias="roomNo")
     requested_tag: Optional[str] = Field(default=None, alias="requestedTag")
     action: Optional[str] = None
     expected_price: Optional[int] = Field(default=None, alias="expectedPrice")
-    created_at: Optional[datetime] = Field(default=None, alias="createdAt")
+    created_at: Optional[Any] = Field(default=None, alias="createdAt")
 
 
 class SpendingInsightRequest(BaseModel):

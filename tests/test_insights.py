@@ -83,6 +83,7 @@ def test_spending_summary_accepts_nullable_operating_fields():
                     "roomNo": 1,
                     "amount": 1000,
                     "goodPriceMatched": False,
+                    "receiptIssuedAt": [2026, 6, 15, 12, 0, 0],
                 }
             ],
             "recommendationInteractions": [
@@ -91,6 +92,7 @@ def test_spending_summary_accepts_nullable_operating_fields():
                     "requestedTag": None,
                     "action": None,
                     "expectedPrice": None,
+                    "createdAt": [2026, 6, 15, 12, 0, 0],
                 }
             ],
         },
