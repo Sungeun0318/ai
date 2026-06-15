@@ -57,7 +57,7 @@ EB_S3_BUCKET
 AWS_REGION=ap-northeast-2
 EB_APPLICATION_NAME=beggar-ai
 EB_ENVIRONMENT_NAME=Beggar-ai-env
-EB_S3_BUCKET=elasticbeanstalk-ap-northeast-2-계정ID
+EB_S3_BUCKET=beggar-ai-eb-deploy-190535467868
 ```
 
 주의:
@@ -134,7 +134,7 @@ web: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 백엔드 Elastic Beanstalk 환경 변수에 AI 서버 주소를 넣는다.
 
 ```text
-AI_SERVER_BASE_URL=http://beggar-ai-env.eba-xxxxx.ap-northeast-2.elasticbeanstalk.com
+AI_SERVER_BASE_URL=http://Beggar-ai-env.eba-qsupaqzy.ap-northeast-2.elasticbeanstalk.com
 ```
 
 백엔드 설정 파일에서는 아래 값으로 사용한다.
@@ -149,6 +149,12 @@ ai-server.base-url=${AI_SERVER_BASE_URL:http://localhost:8000}
 
 ```bash
 curl http://AI_EB_URL/api/v1/health
+```
+
+현재 AI 서버 URL:
+
+```text
+http://Beggar-ai-env.eba-qsupaqzy.ap-northeast-2.elasticbeanstalk.com
 ```
 
 정상 응답:
