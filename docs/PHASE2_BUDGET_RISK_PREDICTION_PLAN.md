@@ -303,6 +303,22 @@ accuracy 0.7 이상이면 발표용으로 사용
 0.7 미만이면 규칙 기반 모델을 최종 사용
 ```
 
+현재 구현 결과:
+
+```text
+seed CSV 기준
+random_state=42
+RandomForestClassifier
+accuracy=0.9950
+```
+
+주의:
+
+```text
+이 정확도는 샘플 데이터 기준이다.
+실제 운영 데이터에서도 동일 정확도를 보장한다는 의미는 아니다.
+```
+
 ### Step 6. 백엔드 admin API 연동
 
 추가 후보:

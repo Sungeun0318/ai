@@ -127,6 +127,32 @@ AI `recommend` 도메인은 후속 작업에서 학습 모델 기반 추천 등�
 pytest -v
 ```
 
+## 예산 위험도 모델 학습
+
+seed CSV가 있으면 아래 명령으로 예산 초과 위험도 모델을 학습한다.
+
+```bash
+python scripts/train_budget_risk_model.py --seed-dir seed --output-dir data/models
+```
+
+현재 샘플 데이터 기준 검증 결과:
+
+```text
+RandomForestClassifier
+random_state=42
+accuracy=0.9950
+```
+
+산출물:
+
+```text
+data/models/budget_risk_random_forest.pkl
+data/models/budget_risk_metrics.json
+data/models/budget_risk_features.csv
+```
+
+`data/models/*`는 생성 산출물이므로 git에 올리지 않는다.
+
 ## 참고
 
 - 전체 기능 명세: `../docs/APP_FEATURES.md`

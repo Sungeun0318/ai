@@ -104,8 +104,10 @@ data/
 !data/
 data/*
 !data/sample/
+data/sample/*
 !data/sample/.gitkeep
 !data/models/
+data/models/*
 !data/models/.gitkeep
 models/
 !data/models/
